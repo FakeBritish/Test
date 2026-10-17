@@ -1,4 +1,4 @@
-name: Publish RideZen CI Bundle
+name: Publish RideZen Litterbox Link
 
 on:
   push:
@@ -6,28 +6,26 @@ on:
       - ridezen-delivery-launcherhome2
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   publish:
-    if: "!contains(github.event.head_commit.message, '[skip ci]')"
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout delivery branch
-        uses: actions/checkout@v4
-
-      - name: Download RideZen CI bundle
+      - name: Download compiled bundle
         run: |
           curl -L --fail --retry 3 --retry-delay 2 \
             "https://tempfile.org/AUnmWNdrRzn/download" \
             -o RideZen-LAUNCHERHOME2-CI.zip
           ls -lh RideZen-LAUNCHERHOME2-CI.zip
-          test "$(stat -c%s RideZen-LAUNCHERHOME2-CI.zip)" -gt 10000000
 
-      - name: Commit delivery bundle
+      - name: Upload bundle to Litterbox
+        shell: bash
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add RideZen-LAUNCHERHOME2-CI.zip
-          git commit -m "Publish RideZen LAUNCHERHOME2 CI bundle [skip ci]"
-          git push origin HEAD:ridezen-delivery-launcherhome2
+          set -e
+          URL="$(curl --fail --show-error --silent \
+            -F "reqtype=fileupload" \
+            -F "time=1h" \
+            -F "fileToUpload=@RideZen-LAUNCHERHOME2-CI.zip" \
+            "https://litterbox.catbox.moe/resources/internals/api.php")"
+          echo "LITTERBOX_URL=$URL"
