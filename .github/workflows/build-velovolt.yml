@@ -64,6 +64,7 @@ jobs:
               t = k.read_text()
               t = t.replace('fun setTab(t:MainTab)', 'fun switchTab(t:MainTab)')
               t = t.replace('.setTab(', '.switchTab(')
+              t = t.replace('::setTab', '::switchTab')
               k.write_text(t)
           PY
           grep -n "compileSdk" VeloVolt/app/build.gradle.kts
