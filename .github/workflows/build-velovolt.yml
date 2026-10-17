@@ -1,0 +1,70 @@
+name: Build VeloVolt APK
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - "velovolt-build/**"
+      - ".github/workflows/build-velovolt.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install required Android SDK packages
+        shell: bash
+        run: |
+          yes | sdkmanager --licenses >/dev/null 2>&1 || true
+          sdkmanager "platform-tools" "platforms;android-37" "build-tools;36.0.0"
+
+      - name: Reassemble VeloVolt source archive
+        shell: bash
+        run: |
+          cat velovolt-build/parts/part*.b64 | base64 --decode > VeloVolt_source.zip
+          unzip -q VeloVolt_source.zip
+          test -f VeloVolt/settings.gradle.kts
+          echo "Source archive reconstructed successfully."
+
+      - name: Set up Gradle 9.3.1
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "9.3.1"
+
+      - name: Build debug APK
+        working-directory: VeloVolt
+        shell: bash
+        run: |
+          gradle --no-daemon --stacktrace assembleDebug
+
+      - name: Verify APK
+        shell: bash
+        run: |
+          test -f VeloVolt/app/build/outputs/apk/debug/app-debug.apk
+          cp VeloVolt/app/build/outputs/apk/debug/app-debug.apk VeloVolt-debug.apk
+          ls -lh VeloVolt-debug.apk
+
+      - name: Upload VeloVolt APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: VeloVolt-debug-apk
+          path: VeloVolt-debug.apk
+          if-no-files-found: error
+          retention-days: 7
