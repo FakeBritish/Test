@@ -1,4 +1,4 @@
-name: Publish RideZen Litterbox Link
+name: Publish RideZen Beacon Text Bundle
 
 on:
   push:
@@ -19,13 +19,16 @@ jobs:
             -o RideZen-LAUNCHERHOME2-CI.zip
           ls -lh RideZen-LAUNCHERHOME2-CI.zip
 
-      - name: Upload bundle to Litterbox
+      - name: Encode as text
+        run: |
+          base64 -w 0 RideZen-LAUNCHERHOME2-CI.zip > RideZen-LAUNCHERHOME2-CI.zip.b64.txt
+          ls -lh RideZen-LAUNCHERHOME2-CI.zip.b64.txt
+
+      - name: Upload text bundle to Beacon
         shell: bash
         run: |
           set -e
-          URL="$(curl --fail --show-error --silent \
-            -F "reqtype=fileupload" \
-            -F "time=1h" \
-            -F "fileToUpload=@RideZen-LAUNCHERHOME2-CI.zip" \
-            "https://litterbox.catbox.moe/resources/internals/api.php")"
-          echo "LITTERBOX_URL=$URL"
+          RESPONSE="$(curl --fail --show-error --silent \
+            "https://beacon.host/v1/publish" \
+            -F "file=@RideZen-LAUNCHERHOME2-CI.zip.b64.txt")"
+          echo "BEACON_RESPONSE=$RESPONSE"
