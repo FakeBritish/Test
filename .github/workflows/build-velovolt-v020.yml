@@ -1,0 +1,154 @@
+name: Build VeloVolt 0.2 APK
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - "velovolt-v020/**"
+      - ".github/workflows/build-velovolt-v020.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install Android SDK 36
+        shell: bash
+        run: |
+          SDKMANAGER="$(command -v sdkmanager || true)"
+          if [ -z "$SDKMANAGER" ]; then
+            SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | sort -V | tail -n 1)"
+          fi
+          test -x "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
+          "$SDKMANAGER" "platform-tools" "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Reassemble project
+        shell: bash
+        run: |
+          cat velovolt-v020/part*.b64 | base64 --decode > VeloVolt_0.2.0.zip
+          unzip -q VeloVolt_0.2.0.zip
+          test -f VeloVolt/settings.gradle.kts
+          test -f VeloVolt/app/src/main/java/com/glc/velovolt/network/RoutingClient.kt
+          echo "VeloVolt project reconstructed"
+
+      - name: Audit interactive handlers
+        shell: bash
+        run: |
+          if grep -RInE 'onClick[[:space:]]*=[[:space:]]*\{[[:space:]]*\}' VeloVolt/app/src/main/java; then
+            echo "Found empty onClick handler"
+            exit 1
+          fi
+          if grep -RInE 'TODO|FIXME|not configured in this development build|Production backend can' VeloVolt/app/src/main/java; then
+            echo "Found unfinished user-facing logic"
+            exit 1
+          fi
+          echo "No empty click handlers or known placeholder actions found"
+
+      - name: Verify public map, search and bicycle-routing services
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json, urllib.request, urllib.parse, time
+
+          def get_json(url, headers=None, timeout=20):
+              req=urllib.request.Request(url, headers=headers or {})
+              with urllib.request.urlopen(req, timeout=timeout) as r:
+                  return json.loads(r.read().decode())
+
+          style=get_json("https://tiles.openfreemap.org/styles/liberty", {"User-Agent":"VeloVolt-CI/0.2"})
+          assert style.get("version")==8 and style.get("sources"), "OpenFreeMap style invalid"
+
+          q=urllib.parse.quote("Birmingham New Street")
+          places=get_json(
+              f"https://nominatim.openstreetmap.org/search?format=jsonv2&limit=2&q={q}",
+              {"User-Agent":"VeloVolt-CI/0.2 route verification"}
+          )
+          assert isinstance(places,list) and places, "Nominatim returned no test place"
+          time.sleep(1.1)
+
+          payload={
+              "locations":[{"lat":52.4862,"lon":-1.8904},{"lat":52.5005,"lon":-1.8340}],
+              "costing":"bicycle","units":"kilometers","language":"en-GB"
+          }
+          body=json.dumps(payload).encode()
+          req=urllib.request.Request(
+              "https://valhalla1.openstreetmap.de/route",
+              data=body,
+              headers={"User-Agent":"VeloVolt-CI/0.2","Content-Type":"application/json","Accept":"application/json"},
+              method="POST"
+          )
+          routing_ok=False
+          try:
+              with urllib.request.urlopen(req, timeout=25) as r:
+                  route=json.loads(r.read().decode())
+              routing_ok=bool(route.get("trip",{}).get("legs"))
+              print("Valhalla route test:", routing_ok)
+          except Exception as e:
+              print("Valhalla unavailable during test:", e)
+
+          if not routing_ok:
+              params=urllib.parse.urlencode({
+                  "lonlats":"-1.8904,52.4862|-1.8340,52.5005",
+                  "profile":"trekking",
+                  "alternativeidx":"0",
+                  "format":"geojson",
+                  "timode":"1"
+              })
+              br=get_json("https://brouter.de/brouter?"+params, {"User-Agent":"VeloVolt-CI/0.2"}, 30)
+              routing_ok=bool(br.get("features"))
+              print("BRouter fallback test:", routing_ok)
+
+          assert routing_ok, "Neither bicycle routing provider returned a route"
+          print("External service verification passed")
+          PY
+
+      - name: Set up Gradle 9.3.1
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "9.3.1"
+
+      - name: Run unit tests and compile
+        working-directory: VeloVolt
+        shell: bash
+        run: |
+          gradle --no-daemon --stacktrace testDebugUnitTest assembleDebug
+
+      - name: Verify APK
+        shell: bash
+        run: |
+          test -f VeloVolt/app/build/outputs/apk/debug/app-debug.apk
+          cp VeloVolt/app/build/outputs/apk/debug/app-debug.apk VeloVolt-0.2.0-debug.apk
+          sha256sum VeloVolt-0.2.0-debug.apk
+          ls -lh VeloVolt-0.2.0-debug.apk
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: VeloVolt-0.2.0-debug-apk
+          path: VeloVolt-0.2.0-debug.apk
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload unit-test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: VeloVolt-0.2.0-test-report
+          path: VeloVolt/app/build/reports/tests/testDebugUnitTest
+          if-no-files-found: ignore
+          retention-days: 7
