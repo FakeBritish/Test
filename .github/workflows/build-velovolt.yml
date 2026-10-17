@@ -48,6 +48,10 @@ jobs:
           unzip -q VeloVolt_source.zip
           test -f VeloVolt/settings.gradle.kts
           sed -i 's/compileSdk = 37/compileSdk = 36/' VeloVolt/app/build.gradle.kts
+          sed -i 's/compose-bom:2026.09.00/compose-bom:2025.08.00/' VeloVolt/app/build.gradle.kts
+          sed -i 's/core-ktx:1.17.0/core-ktx:1.16.0/' VeloVolt/app/build.gradle.kts
+          sed -i 's/activity-compose:1.13.0/activity-compose:1.10.1/' VeloVolt/app/build.gradle.kts
+          sed -i 's/lifecycle-runtime-ktx:2.11.0/lifecycle-runtime-ktx:2.9.2/' VeloVolt/app/build.gradle.kts
           python3 - <<'PY'
           from pathlib import Path
           p = Path("VeloVolt/app/src/main/java/com/glc/velovolt/ui/Screens.kt")
