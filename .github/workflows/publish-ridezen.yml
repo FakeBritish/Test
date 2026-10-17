@@ -1,4 +1,4 @@
-name: Publish RideZen Beacon Chunks
+name: Publish RideZen Artifact
 
 on:
   push:
@@ -17,20 +17,12 @@ jobs:
           curl -L --fail --retry 3 --retry-delay 2 \
             "https://tempfile.org/AUnmWNdrRzn/download" \
             -o RideZen-LAUNCHERHOME2-CI.zip
-          base64 -w 0 RideZen-LAUNCHERHOME2-CI.zip > bundle.b64
-          split -b 4M -d -a 2 --additional-suffix=.txt bundle.b64 ridezen_chunk_
-          ls -lh ridezen_chunk_*.txt
+          ls -lh RideZen-LAUNCHERHOME2-CI.zip
 
-      - name: Upload text chunks to Beacon
-        shell: bash
-        run: |
-          set -e
-          i=0
-          for f in ridezen_chunk_*.txt; do
-            RESPONSE="$(curl --fail --show-error --silent \
-              "https://beacon.host/v1/publish" \
-              -F "file=@$f")"
-            echo "BEACON_CHUNK_$i=$RESPONSE"
-            i=$((i+1))
-          done
-          echo "BEACON_CHUNK_COUNT=$i"
+      - name: Upload GitHub artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: RideZen-LAUNCHERHOME2-CI
+          path: RideZen-LAUNCHERHOME2-CI.zip
+          if-no-files-found: error
+          retention-days: 1
