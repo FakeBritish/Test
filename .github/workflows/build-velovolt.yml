@@ -55,6 +55,12 @@ jobs:
           s = s.replace('Tab(section==i,{section=i},{Text(t)})', 'Tab(selected=section==i,onClick={section=i},text={Text(t)})')
           s = s.replace('Icons.Default.OfflineMap', 'Icons.Default.Map')
           p.write_text(s)
+          root = Path("VeloVolt/app/src/main/java")
+          for k in root.rglob("*.kt"):
+              t = k.read_text()
+              t = t.replace('fun setTab(t:MainTab)', 'fun switchTab(t:MainTab)')
+              t = t.replace('.setTab(', '.switchTab(')
+              k.write_text(t)
           PY
           grep -n "compileSdk" VeloVolt/app/build.gradle.kts
           grep -n "ScrollableTabRow" VeloVolt/app/src/main/java/com/glc/velovolt/ui/Screens.kt
