@@ -1,0 +1,27 @@
+name: Relay RideZen Bike Dashboard Build
+
+on:
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  contents: read
+
+jobs:
+  relay:
+    if: startsWith(github.head_ref, 'ridezen-delivery-bike-dashboard')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download CI bundle
+        run: |
+          curl -L --fail --retry 3 --retry-delay 2             "https://tempfile.org/MB1BmGDQN4Y/download"             -o RideZen-v0.9.0-BIKE-DASHBOARD1-CI.zip
+          ls -lh RideZen-v0.9.0-BIKE-DASHBOARD1-CI.zip
+          test "$(stat -c%s RideZen-v0.9.0-BIKE-DASHBOARD1-CI.zip)" -gt 10000000
+
+      - name: Upload GitHub artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: RideZen-v0.9.0-BIKE-DASHBOARD1-CI
+          path: RideZen-v0.9.0-BIKE-DASHBOARD1-CI.zip
+          if-no-files-found: error
+          retention-days: 1
