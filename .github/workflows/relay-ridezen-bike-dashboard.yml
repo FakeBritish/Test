@@ -14,7 +14,7 @@ jobs:
     steps:
       - name: Download CI bundle
         run: |
-          curl -L --fail --retry 3 --retry-delay 2             "https://tempfile.org/MB1BmGDQN4Y/download"             -o RideZen-v0.9.0-BIKE-DASHBOARD1-CI.zip
+          curl -L --fail --retry 3 --retry-delay 2             "https://tempfile.org/nJDVmvVeEFb/download"             -o RideZen-v0.9.0-BIKE-DASHBOARD1-CI.zip
           ls -lh RideZen-v0.9.0-BIKE-DASHBOARD1-CI.zip
           test "$(stat -c%s RideZen-v0.9.0-BIKE-DASHBOARD1-CI.zip)" -gt 10000000
 
