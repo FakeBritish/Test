@@ -1,0 +1,153 @@
+name: Build VeloVolt 0.2.1 APK
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - "velovolt-v021/**"
+      - ".github/workflows/build-velovolt-v021.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install Android SDK 36
+        shell: bash
+        run: |
+          SDKMANAGER="$(command -v sdkmanager || true)"
+          if [ -z "$SDKMANAGER" ]; then
+            SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | sort -V | tail -n 1)"
+          fi
+          test -x "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
+          "$SDKMANAGER" "platform-tools" "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Reassemble VeloVolt 0.2.1
+        shell: bash
+        run: |
+          base64 --decode velovolt-v021/source.b64 > VeloVolt_0.2.1.zip
+          unzip -q VeloVolt_0.2.1.zip
+          test -f VeloVolt/settings.gradle.kts
+          grep -q 'versionName = "0.2.1"' VeloVolt/app/build.gradle.kts
+          grep -q 'destinationRoundTrip' VeloVolt/app/src/main/java/com/glc/velovolt/network/RoutingClient.kt
+          grep -q 'Open-Meteo' VeloVolt/app/src/main/java/com/glc/velovolt/network/ElevationClient.kt
+          grep -q '45 millas' VeloVolt/app/src/main/java/com/glc/velovolt/planner/SmartPlanner.kt
+
+      - name: Audit interactive handlers and placeholders
+        shell: bash
+        run: |
+          if grep -RInE 'onClick[[:space:]]*=[[:space:]]*\{[[:space:]]*\}' VeloVolt/app/src/main/java; then
+            echo "Found empty onClick handler"
+            exit 1
+          fi
+          if grep -RInE 'TODO|FIXME|not configured in this development build' VeloVolt/app/src/main/java; then
+            echo "Found unfinished user-facing logic"
+            exit 1
+          fi
+
+      - name: Verify live geocoding, round-trip routing and elevation
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json, urllib.parse, urllib.request, time
+
+          UA={"User-Agent":"VeloVolt-CI/0.2.1","Accept":"application/json"}
+
+          def get(url, timeout=25):
+              req=urllib.request.Request(url, headers=UA)
+              with urllib.request.urlopen(req, timeout=timeout) as r:
+                  return json.loads(r.read().decode())
+
+          def geocode(q):
+              url="https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q="+urllib.parse.quote(q)
+              data=get(url)
+              assert data, f"No geocoding result for {q}"
+              return float(data[0]["lat"]), float(data[0]["lon"])
+
+          start=geocode("B29 7ND, UK")
+          time.sleep(1.1)
+          via=geocode("Wolverhampton, UK")
+          payload={
+              "locations":[
+                  {"lat":start[0],"lon":start[1]},
+                  {"lat":via[0],"lon":via[1]},
+                  {"lat":start[0],"lon":start[1]}
+              ],
+              "costing":"bicycle",
+              "units":"kilometers",
+              "language":"en-GB"
+          }
+          req=urllib.request.Request(
+              "https://valhalla1.openstreetmap.de/route",
+              data=json.dumps(payload).encode(),
+              headers={**UA,"Content-Type":"application/json"},
+              method="POST"
+          )
+          with urllib.request.urlopen(req, timeout=30) as r:
+              route=json.loads(r.read().decode())
+          trip=route["trip"]
+          assert len(trip["legs"]) >= 2, "Round trip did not contain outbound and return legs"
+          assert trip["summary"]["length"] > 20, "Round trip length is implausibly short"
+
+          lat=",".join([str(start[0]),str(via[0]),str(start[0]+0.05)])
+          lon=",".join([str(start[1]),str(via[1]),str(start[1]+0.03)])
+          elev=get(f"https://api.open-meteo.com/v1/elevation?latitude={lat}&longitude={lon}")
+          vals=elev.get("elevation",[])
+          assert len(vals)==3 and all(v is not None for v in vals), "Elevation API failed"
+          assert max(vals)-min(vals) >= 1, "Elevation sample unexpectedly flat/invalid"
+
+          print("Start:", start, "Via:", via)
+          print("Round-trip km:", trip["summary"]["length"])
+          print("Elevation samples:", vals)
+          PY
+
+      - name: Set up Gradle 9.3.1
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "9.3.1"
+
+      - name: Run unit tests and build APK
+        working-directory: VeloVolt
+        shell: bash
+        run: |
+          gradle --no-daemon --stacktrace testDebugUnitTest assembleDebug
+
+      - name: Verify APK
+        shell: bash
+        run: |
+          test -f VeloVolt/app/build/outputs/apk/debug/app-debug.apk
+          cp VeloVolt/app/build/outputs/apk/debug/app-debug.apk VeloVolt-0.2.1-debug.apk
+          sha256sum VeloVolt-0.2.1-debug.apk
+          ls -lh VeloVolt-0.2.1-debug.apk
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: VeloVolt-0.2.1-debug-apk
+          path: VeloVolt-0.2.1-debug.apk
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: VeloVolt-0.2.1-test-report
+          path: VeloVolt/app/build/reports/tests/testDebugUnitTest
+          if-no-files-found: ignore
+          retention-days: 7
