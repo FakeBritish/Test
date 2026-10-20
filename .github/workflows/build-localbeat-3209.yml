@@ -55,24 +55,24 @@ jobs:
           set -euo pipefail
           rm -rf android/ytdlp/src/main/vendor-python
           mkdir -p android/ytdlp/src/main/vendor-python
-          python3 -m pip install --disable-pip-version-check --no-deps --target android/ytdlp/src/main/vendor-python             "yt-dlp==2026.8.19" "certifi==2026.7.22"
+          python3 -m pip install --disable-pip-version-check --no-deps --target android/ytdlp/src/main/vendor-python "yt-dlp==2026.8.19" "certifi==2026.7.22"
           cp overlay/localbeat_spotify.py android/ytdlp/src/main/vendor-python/yt_dlp/extractor/localbeat_spotify.py
-          cat >> android/ytdlp/src/main/vendor-python/yt_dlp/extractor/__init__.py <<'PY'
-
-# LocalBeat custom Spotify extractor. Appended by the reproducible CI builder.
-_localbeat_original_gen_extractor_classes = gen_extractor_classes
-
-def _localbeat_spotify_ie():
-    from .localbeat_spotify import SpotifyLocalBeatIE
-    return SpotifyLocalBeatIE
-
-def gen_extractor_classes():
-    classes = list(_localbeat_original_gen_extractor_classes())
-    spotify = _localbeat_spotify_ie()
-    return [spotify, *[klass for klass in classes if klass is not spotify]]
-PY
+          INIT="android/ytdlp/src/main/vendor-python/yt_dlp/extractor/__init__.py"
+          printf '%s\n' \
+            '' \
+            '# LocalBeat custom Spotify extractor. Appended by CI.' \
+            '_localbeat_original_gen_extractor_classes = gen_extractor_classes' \
+            '' \
+            'def _localbeat_spotify_ie():' \
+            '    from .localbeat_spotify import SpotifyLocalBeatIE' \
+            '    return SpotifyLocalBeatIE' \
+            '' \
+            'def gen_extractor_classes():' \
+            '    classes = list(_localbeat_original_gen_extractor_classes())' \
+            '    spotify = _localbeat_spotify_ie()' \
+            '    return [spotify, *[klass for klass in classes if klass is not spotify]]' >> "$INIT"
           python3 -m py_compile android/ytdlp/src/main/vendor-python/yt_dlp/extractor/localbeat_spotify.py
-          python3 -m py_compile android/ytdlp/src/main/vendor-python/yt_dlp/extractor/__init__.py
+          python3 -m py_compile "$INIT"
 
       - name: Set up Gradle 8.9
         uses: gradle/actions/setup-gradle@v4
