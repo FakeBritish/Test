@@ -1,0 +1,34 @@
+name: Export Android apksigner
+
+on:
+  push:
+    branches:
+      - localbeat-3209-apk-build
+    paths:
+      - ".github/workflows/export-localbeat-apksigner.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Locate Android build tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -path '*/bin/sdkmanager' | sort -V | tail -n 1)"
+          yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
+          "$SDKMANAGER" "build-tools;35.0.0"
+          test -f "$ANDROID_HOME/build-tools/35.0.0/lib/apksigner.jar"
+          cp "$ANDROID_HOME/build-tools/35.0.0/lib/apksigner.jar" apksigner.jar
+          sha256sum apksigner.jar
+
+      - name: Upload apksigner
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apksigner-35
+          path: apksigner.jar
+          retention-days: 1
