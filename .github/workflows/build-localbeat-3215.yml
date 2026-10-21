@@ -121,10 +121,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          tr -d '\r\n' < localbeat-3215-build/localbeat-3215-ci.patch.gz.b64 | base64 --decode > /tmp/localbeat-3215.patch.gz
-          echo "58f2c6904186c92bae9978c7fec5c8332a204d506d1e2d0d6ac6951c661a63b6  /tmp/localbeat-3215.patch.gz" | sha256sum -c -
+          tr -d '\r\n' < localbeat-3215-build/localbeat-3215-ci-v2.patch.gz.b64 | base64 --decode > /tmp/localbeat-3215.patch.gz
+          echo "e10b3d00e57666c3d584a2aa134cb1527d603115071b7852994b37f090c6d168  /tmp/localbeat-3215.patch.gz" | sha256sum -c -
           gzip -dc /tmp/localbeat-3215.patch.gz > /tmp/localbeat-3215.patch
-          echo "ce905804b693d375e13f26a4447cab6076080e38027ae1485536f41a61600acb  /tmp/localbeat-3215.patch" | sha256sum -c -
+          echo "6fe5648df6911a4c7090ce9e5ea2af27278a72dcfcffde7092e9ca3788809e1b  /tmp/localbeat-3215.patch" | sha256sum -c -
           patch --batch -p0 < /tmp/localbeat-3215.patch
           grep -q 'versionName = "3.21.5"' android/app/build.gradle.kts
           grep -q 'versionCode = 2103252' android/app/build.gradle.kts
