@@ -1,0 +1,136 @@
+name: Build LocalBeat 3.21.1 unsigned APK
+
+on:
+  push:
+    branches:
+      - localbeat-3211-build-from-3210
+    paths:
+      - "localbeat-3211-build/**"
+      - ".github/workflows/build-localbeat-3211.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout temporary build branch
+        uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Use runner Android SDK and install API 35
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -path '*/bin/sdkmanager' | sort -V | tail -n 1)"
+          test -x "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
+          "$SDKMANAGER" "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Reassemble LocalBeat 3.20.9 Android source
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat localbeat-3209-build/parts/part*.b64 | tr -d '\r\n' | base64 --decode > localbeat-3209-payload.tar.xz
+          echo "4115d0600c8227bd26b6760677a944e08a52675a55936a54ebbf2bc796c012bf  localbeat-3209-payload.tar.xz" | sha256sum -c -
+          tar -xJf localbeat-3209-payload.tar.xz
+          test -f android/settings.gradle.kts
+          test -f android/app/build.gradle.kts
+          test -f overlay/localbeat_spotify.py
+
+      - name: Apply LocalBeat 3.21.0 Android patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          tr -d '\r\n' < localbeat-3210-build/localbeat-3210-android.patch.gz.b64 | base64 --decode > /tmp/localbeat-3210.patch.gz
+          echo "eccffe96df2376627c8d57375edc1f4b29be1d48b8e99264509eaa309e8e4938  /tmp/localbeat-3210.patch.gz" | sha256sum -c -
+          gzip -dc /tmp/localbeat-3210.patch.gz > /tmp/localbeat-3210.patch
+          echo "21dc10b38a0c45e39827f49fd48ebbfad75c7c323f15937cc2080fe21116392b  /tmp/localbeat-3210.patch" | sha256sum -c -
+          patch --batch -p0 < /tmp/localbeat-3210.patch
+          grep -q 'versionName = "3.21.0"' android/app/build.gradle.kts
+          grep -q 'versionCode = 2103247' android/app/build.gradle.kts
+
+      - name: Apply LocalBeat 3.21.1 Android patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          tr -d '\r\n' < localbeat-3211-build/localbeat-3211-android.patch.gz.b64 | base64 --decode > /tmp/localbeat-3211.patch.gz
+          echo "c3b30d99bd1837543be7dc65e53d68b8a2833696420a01170dd4e0ac0ad1b4c5  /tmp/localbeat-3211.patch.gz" | sha256sum -c -
+          gzip -dc /tmp/localbeat-3211.patch.gz > /tmp/localbeat-3211.patch
+          echo "75559c49297294ae332cfb7146249238a5d008586c917e16852d81834d86db85  /tmp/localbeat-3211.patch" | sha256sum -c -
+          patch --batch -p0 < /tmp/localbeat-3211.patch
+          grep -q 'versionName = "3.21.1"' android/app/build.gradle.kts
+          grep -q 'versionCode = 2103248' android/app/build.gradle.kts
+          grep -q "lb.playerSession.v1" android/app/src/main/assets/app.js
+          grep -q "padding-top:30px" android/app/src/main/assets/app.css
+          grep -q "No hay canciones" android/app/src/main/assets/app.js
+          node --check android/app/src/main/assets/app.js
+
+      - name: Prepare yt-dlp and LocalBeat Spotify extractor
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf android/ytdlp/src/main/vendor-python
+          mkdir -p android/ytdlp/src/main/vendor-python
+          python3 -m pip install --disable-pip-version-check --no-deps --target android/ytdlp/src/main/vendor-python "yt-dlp==2026.8.19" "certifi==2026.7.22"
+          cp overlay/localbeat_spotify.py android/ytdlp/src/main/vendor-python/yt_dlp/extractor/localbeat_spotify.py
+          INIT="android/ytdlp/src/main/vendor-python/yt_dlp/extractor/__init__.py"
+          printf '%s\n' \
+            '' \
+            '# LocalBeat custom Spotify extractor. Appended by CI.' \
+            '_localbeat_original_gen_extractor_classes = gen_extractor_classes' \
+            '' \
+            'def _localbeat_spotify_ie():' \
+            '    from .localbeat_spotify import SpotifyLocalBeatIE' \
+            '    return SpotifyLocalBeatIE' \
+            '' \
+            'def gen_extractor_classes():' \
+            '    classes = list(_localbeat_original_gen_extractor_classes())' \
+            '    spotify = _localbeat_spotify_ie()' \
+            '    return [spotify, *[klass for klass in classes if klass is not spotify]]' >> "$INIT"
+          python3 -m py_compile android/ytdlp/src/main/vendor-python/yt_dlp/extractor/localbeat_spotify.py
+          python3 -m py_compile "$INIT"
+
+      - name: Set up Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+
+      - name: Build unsigned release APK
+        working-directory: android
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle --no-daemon --stacktrace :app:assembleRelease
+
+      - name: Verify and name unsigned APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          SRC="$(find android/app/build/outputs/apk/release -maxdepth 1 -type f -name '*.apk' | head -n 1)"
+          test -n "$SRC"
+          OUT="LocalBeat-3.21.1-UNSIGNED.apk"
+          cp "$SRC" "$OUT"
+          unzip -t "$OUT" >/dev/null
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$OUT" | head -n 5
+          sha256sum "$OUT" | tee LocalBeat-3.21.1-UNSIGNED.apk.sha256
+          ls -lh "$OUT"
+
+      - name: Upload unsigned LocalBeat APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: LocalBeat-3.21.1-UNSIGNED
+          path: |
+            LocalBeat-3.21.1-UNSIGNED.apk
+            LocalBeat-3.21.1-UNSIGNED.apk.sha256
+          if-no-files-found: error
+          retention-days: 2
