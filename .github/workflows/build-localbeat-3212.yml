@@ -94,45 +94,33 @@ jobs:
           python3 -m pip install --disable-pip-version-check --no-deps --target android/ytdlp/src/main/vendor-python "yt-dlp==2026.8.19" "certifi==2026.7.22"
           cp overlay/localbeat_spotify.py android/ytdlp/src/main/vendor-python/yt_dlp/extractor/localbeat_spotify.py
           INIT="android/ytdlp/src/main/vendor-python/yt_dlp/extractor/__init__.py"
-          cat >> "$INIT" <<'PY'
-
-# LocalBeat 3.21.2 custom Spotify extractor.
-_localbeat_original_gen_extractor_classes = gen_extractor_classes
-
-def _localbeat_spotify_ie():
-    from .localbeat_spotify import SpotifyLocalBeatIE
-    return SpotifyLocalBeatIE
-
-def gen_extractor_classes():
-    classes = list(_localbeat_original_gen_extractor_classes())
-    spotify = _localbeat_spotify_ie()
-    # Register in yt-dlp's lookup context as well as the ordered class list.
-    # Internal playlist paths can resolve by extractor key; both spellings are
-    # intentionally present to prevent intermittent KeyError lookups.
-    try:
-        context = _extractors_context.value
-        context.setdefault('SpotifyLocalBeat', spotify)
-        context.setdefault('SpotifyLocalBeatIE', spotify)
-    except Exception:
-        pass
-    ordered = []
-    seen = set()
-    for klass in [spotify, *classes]:
-        if klass in seen:
-            continue
-        seen.add(klass)
-        ordered.append(klass)
-    return ordered
-PY
-          PYTHONPATH="android/ytdlp/src/main/vendor-python" python3 - <<'PY'
-from yt_dlp.extractor import gen_extractor_classes, _extractors_context
-from yt_dlp.extractor.localbeat_spotify import SpotifyLocalBeatIE
-classes = gen_extractor_classes()
-assert SpotifyLocalBeatIE in classes
-assert _extractors_context.value.get('SpotifyLocalBeat') is SpotifyLocalBeatIE
-assert _extractors_context.value.get('SpotifyLocalBeatIE') is SpotifyLocalBeatIE
-print('SpotifyLocalBeatIE registry OK')
-PY
+          printf '%s\n' \
+            '' \
+            '# LocalBeat 3.21.2 custom Spotify extractor.' \
+            '_localbeat_original_gen_extractor_classes = gen_extractor_classes' \
+            '' \
+            'def _localbeat_spotify_ie():' \
+            '    from .localbeat_spotify import SpotifyLocalBeatIE' \
+            '    return SpotifyLocalBeatIE' \
+            '' \
+            'def gen_extractor_classes():' \
+            '    classes = list(_localbeat_original_gen_extractor_classes())' \
+            '    spotify = _localbeat_spotify_ie()' \
+            '    try:' \
+            '        context = _extractors_context.value' \
+            "        context.setdefault('SpotifyLocalBeat', spotify)" \
+            "        context.setdefault('SpotifyLocalBeatIE', spotify)" \
+            '    except Exception:' \
+            '        pass' \
+            '    ordered = []' \
+            '    seen = set()' \
+            '    for klass in [spotify, *classes]:' \
+            '        if klass in seen:' \
+            '            continue' \
+            '        seen.add(klass)' \
+            '        ordered.append(klass)' \
+            '    return ordered' >> "$INIT"
+          PYTHONPATH="android/ytdlp/src/main/vendor-python" python3 -c "from yt_dlp.extractor import gen_extractor_classes,_extractors_context; from yt_dlp.extractor.localbeat_spotify import SpotifyLocalBeatIE; classes=gen_extractor_classes(); assert SpotifyLocalBeatIE in classes; assert _extractors_context.value.get('SpotifyLocalBeat') is SpotifyLocalBeatIE; assert _extractors_context.value.get('SpotifyLocalBeatIE') is SpotifyLocalBeatIE; print('SpotifyLocalBeatIE registry OK')"
           python3 -m py_compile android/ytdlp/src/main/vendor-python/yt_dlp/extractor/localbeat_spotify.py
           python3 -m py_compile "$INIT"
 
