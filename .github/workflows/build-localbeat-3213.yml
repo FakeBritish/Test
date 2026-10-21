@@ -150,7 +150,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          gradle --no-daemon --stacktrace :app:assembleRelease
+          gradle --no-daemon --stacktrace -Dorg.gradle.jvmargs='-Xmx5g -XX:MaxMetaspaceSize=1g' :app:assembleRelease
 
       - name: Verify and name unsigned APK
         shell: bash
