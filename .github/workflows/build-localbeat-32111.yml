@@ -1,0 +1,397 @@
+name: Build LocalBeat 3.21.11 unsigned APK
+
+on:
+  push:
+    branches:
+      - localbeat-32111-build-from-32110
+    paths:
+      - "localbeat-32111-build/**"
+      - ".github/workflows/build-localbeat-32111.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout temporary build branch
+        uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Use runner Android SDK and install API 35
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -path '*/bin/sdkmanager' | sort -V | tail -n 1)"
+          test -x "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
+          "$SDKMANAGER" "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Reassemble LocalBeat 3.20.9 Android source
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat localbeat-3209-build/parts/part*.b64 | tr -d '\r\n' | base64 --decode > localbeat-3209-payload.tar.xz
+          echo "4115d0600c8227bd26b6760677a944e08a52675a55936a54ebbf2bc796c012bf  localbeat-3209-payload.tar.xz" | sha256sum -c -
+          tar -xJf localbeat-3209-payload.tar.xz
+          test -f android/settings.gradle.kts
+          test -f android/app/build.gradle.kts
+          test -f overlay/localbeat_spotify.py
+
+      - name: Apply LocalBeat 3.21.0 Android patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          tr -d '\r\n' < localbeat-3210-build/localbeat-3210-android.patch.gz.b64 | base64 --decode > /tmp/localbeat-3210.patch.gz
+          echo "eccffe96df2376627c8d57375edc1f4b29be1d48b8e99264509eaa309e8e4938  /tmp/localbeat-3210.patch.gz" | sha256sum -c -
+          gzip -dc /tmp/localbeat-3210.patch.gz > /tmp/localbeat-3210.patch
+          echo "21dc10b38a0c45e39827f49fd48ebbfad75c7c323f15937cc2080fe21116392b  /tmp/localbeat-3210.patch" | sha256sum -c -
+          patch --batch -p0 < /tmp/localbeat-3210.patch
+
+      - name: Apply LocalBeat 3.21.1 Android patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          tr -d '\r\n' < localbeat-3211-build/localbeat-3211-android.patch.gz.b64 | base64 --decode > /tmp/localbeat-3211.patch.gz
+          echo "c3b30d99bd1837543be7dc65e53d68b8a2833696420a01170dd4e0ac0ad1b4c5  /tmp/localbeat-3211.patch.gz" | sha256sum -c -
+          gzip -dc /tmp/localbeat-3211.patch.gz > /tmp/localbeat-3211.patch
+          echo "75559c49297294ae332cfb7146249238a5d008586c917e16852d81834d86db85  /tmp/localbeat-3211.patch" | sha256sum -c -
+          patch --batch -p0 < /tmp/localbeat-3211.patch
+
+      - name: Apply LocalBeat 3.21.2 Android patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          tr -d '\r\n' < localbeat-3212-build/localbeat-3212-ci.patch.gz.b64 | base64 --decode > /tmp/localbeat-3212.patch.gz
+          echo "f81675ae9d68ac0fb33697764d576dda2ca6bbea21649a9eea454746ec7d78c0  /tmp/localbeat-3212.patch.gz" | sha256sum -c -
+          gzip -dc /tmp/localbeat-3212.patch.gz > /tmp/localbeat-3212.patch
+          echo "5a4adcfbf87ca3fe46e2ada15be937f028d2fcc081961bb8adf2c98ebb571da4  /tmp/localbeat-3212.patch" | sha256sum -c -
+          patch --batch -p0 < /tmp/localbeat-3212.patch
+          grep -q 'versionName = "3.21.2"' android/app/build.gradle.kts
+          grep -q 'versionCode = 2103249' android/app/build.gradle.kts
+          grep -q 'playbackTrimStartSec' android/app/src/main/assets/app.js
+          grep -q 'Ajustar inicio y fin' android/app/src/main/assets/app.js
+          grep -q 'LB_TERMINAL_FLAT_ENTRY' overlay/localbeat_spotify.py
+          ! grep -A30 'LB_TERMINAL_FLAT_ENTRY' overlay/localbeat_spotify.py | grep -q "extractor_key.*self.ie_key"
+          node --check android/app/src/main/assets/app.js
+          python3 -m py_compile overlay/localbeat_spotify.py
+
+      - name: Apply LocalBeat 3.21.3 Android patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          tr -d '\r\n' < localbeat-3213-build/localbeat-3213-ci.patch.gz.b64 | base64 --decode > /tmp/localbeat-3213.patch.gz
+          echo "5cc0e4b7f21fedca756d635ffee6bfcc0c7c1c20c7959500102f4cb38c51c6bb  /tmp/localbeat-3213.patch.gz" | sha256sum -c -
+          gzip -dc /tmp/localbeat-3213.patch.gz > /tmp/localbeat-3213.patch
+          echo "8931e182f59da3384a5b1e3be94142ecf780e593cd151d3fd286e01768b2c4fe  /tmp/localbeat-3213.patch" | sha256sum -c -
+          patch --batch -p0 < /tmp/localbeat-3213.patch
+          grep -q 'versionName = "3.21.3"' android/app/build.gradle.kts
+          grep -q 'versionCode = 2103250' android/app/build.gradle.kts
+          grep -q 'mobileNowTrim' android/app/src/main/assets/app.js
+          grep -q 'lb3213VirtualTimeline' android/app/src/main/assets/app.js
+          grep -q 'lb3213SeekVirtualRatio' android/app/src/main/assets/app.js
+          node --check android/app/src/main/assets/app.js
+
+      - name: Apply LocalBeat 3.21.4 Android patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          tr -d '\r\n' < localbeat-3214-build/localbeat-3214-ci-v2.patch.gz.b64 | base64 --decode > /tmp/localbeat-3214.patch.gz
+          echo "b23a0570f363782f054adca8773b1e15e98f921cd20f1ca2edac6dcdc3101ac2  /tmp/localbeat-3214.patch.gz" | sha256sum -c -
+          gzip -dc /tmp/localbeat-3214.patch.gz > /tmp/localbeat-3214.patch
+          echo "febfc7bc859ab13d3d330b1fd6942bd23e3047280c67928c9b84fb3fe0a3ad27  /tmp/localbeat-3214.patch" | sha256sum -c -
+          patch --batch -p0 < /tmp/localbeat-3214.patch
+          grep -q 'versionName = "3.21.4"' android/app/build.gradle.kts
+          grep -q 'versionCode = 2103251' android/app/build.gradle.kts
+          grep -q 'lb3214OpenPlayerMenu' android/app/src/main/assets/app.js
+          grep -q 'lb3214InstallPrecisionRange' android/app/src/main/assets/app.js
+          grep -q 'lb-trim-precision-range' android/app/src/main/assets/app.css
+          node --check android/app/src/main/assets/app.js
+
+      - name: Apply LocalBeat 3.21.5 Android patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          tr -d '\r\n' < localbeat-3215-build/localbeat-3215-ci-v3.patch.gz.b64 | base64 --decode > /tmp/localbeat-3215.patch.gz
+          echo "1ab8cf99f280e50408fd76a3de8b95fc1a319f65233602bb7799e61eb183c4d5  /tmp/localbeat-3215.patch.gz" | sha256sum -c -
+          gzip -dc /tmp/localbeat-3215.patch.gz > /tmp/localbeat-3215.patch
+          echo "5aec028f47797580c9b2b1ebc944060cab72993daa836c788c9ef7ecc0b29d9d  /tmp/localbeat-3215.patch" | sha256sum -c -
+          patch --batch -p0 < /tmp/localbeat-3215.patch
+          grep -q 'versionName = "3.21.5"' android/app/build.gradle.kts
+          grep -q 'versionCode = 2103252' android/app/build.gradle.kts
+          grep -q 'shuffleArtistScope' android/app/src/main/assets/app.js
+          grep -q 'shuffleArtistCovers' android/app/src/main/assets/app.js
+          grep -q 'lb3215OpenArtistCoverMenu' android/app/src/main/assets/app.js
+          grep -q 'lb-shuffle-artist-row' android/app/src/main/assets/app.css
+          node --check android/app/src/main/assets/app.js
+
+      - name: Apply LocalBeat 3.21.6 Android patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          tr -d '\r\n' < localbeat-3216-build/localbeat-3216-ci.patch.gz.b64 | base64 --decode > /tmp/localbeat-3216.patch.gz
+          echo "6a167b782ba9ddc493d41d428e3d130adf1fa1b202b95f38cb87a95cda445383  /tmp/localbeat-3216.patch.gz" | sha256sum -c -
+          gzip -dc /tmp/localbeat-3216.patch.gz > /tmp/localbeat-3216.patch
+          echo "dee0337302a65cc357c1a88143310c334ff3ea62f0443edf777a3cbf442a6c37  /tmp/localbeat-3216.patch" | sha256sum -c -
+          patch --batch -p0 < /tmp/localbeat-3216.patch
+          grep -q 'versionName = "3.21.6"' android/app/build.gradle.kts
+          grep -q 'versionCode = 2103253' android/app/build.gradle.kts
+          grep -q 'lb-shuffle-v3216-root' android/app/src/main/assets/app.js
+          grep -q '>Normal</option>' android/app/src/main/assets/app.js
+          grep -q '>Por artista</option>' android/app/src/main/assets/app.js
+          grep -q 'Solo artistas específicos' android/app/src/main/assets/app.js
+          grep -q 'Elige entre 1 y 9,999.' android/app/src/main/assets/app.js
+          node --check android/app/src/main/assets/app.js
+
+      - name: Apply LocalBeat 3.21.7 canonical shuffle UI patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          tr -d '\r\n' < localbeat-3217-build/localbeat-3217-ci.patch.gz.b64 | base64 --decode > /tmp/localbeat-3217.patch.gz
+          echo "ae3014328f7011793fee7bcf1e071a95383f7eecf6edc10c547fac29ab75256f  /tmp/localbeat-3217.patch.gz" | sha256sum -c -
+          gzip -dc /tmp/localbeat-3217.patch.gz > /tmp/localbeat-3217.patch
+          echo "458578e75d5926b9f2515fa790420b93d4c3aef7e87958e242cc9739f3668bad  /tmp/localbeat-3217.patch" | sha256sum -c -
+          patch --batch -p0 < /tmp/localbeat-3217.patch
+          grep -q 'versionName = "3.21.7"' android/app/build.gradle.kts
+          grep -q 'versionCode = 2103254' android/app/build.gradle.kts
+          grep -q 'lb-shuffle-v3217-root' android/app/src/main/assets/app.js
+          grep -q 'data-shuffle-mode-choice="normal"' android/app/src/main/assets/app.js
+          grep -q 'data-shuffle-mode-choice="artist_blocks"' android/app/src/main/assets/app.js
+          grep -q 'Solo artistas específicos' android/app/src/main/assets/app.js
+          grep -q 'Elige entre 1 y 9,999.' android/app/src/main/assets/app.js
+          grep -q 'app.js?v=3.21.7' android/app/src/main/assets/index.html
+          grep -q 'app.css?v=3.21.7' android/app/src/main/assets/index.html
+          grep -q 'cacheMode = WebSettings.LOAD_NO_CACHE' android/app/src/main/java/com/localbeat/app/MainActivity.kt
+          test "$(grep -c 'function lb3215ShuffleSettingsHtml' android/app/src/main/assets/app.js)" -eq 1
+          ! grep -q 'Normal · mezclar todas las canciones' android/app/src/main/assets/app.js
+          ! grep -q 'Por artista · bloques consecutivos' android/app/src/main/assets/app.js
+          ! grep -q 'Puedes escribir cualquier cantidad entre 1 y 9999' android/app/src/main/assets/app.js
+          ! grep -q 'id="lbShuffleArtistScope"' android/app/src/main/assets/app.js
+          ! grep -q 'lb-shuffle-v3216-root' android/app/src/main/assets/app.js
+          node --check android/app/src/main/assets/app.js
+
+      - name: Apply LocalBeat 3.21.8 playback-context and shuffle UI fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          tr -d '\r\n' < localbeat-3218-build/localbeat-3218-ci.patch.gz.b64 | base64 --decode > /tmp/localbeat-3218.patch.gz
+          echo "1e0906f32698229b63a9adc6434958a2a902058be8552a0201d843981818b68a  /tmp/localbeat-3218.patch.gz" | sha256sum -c -
+          gzip -dc /tmp/localbeat-3218.patch.gz > /tmp/localbeat-3218.patch
+          echo "0960d54e0f5032f87d68122f4980b08ba3da8625a2486548071eec07c3bb61b9  /tmp/localbeat-3218.patch" | sha256sum -c -
+          patch --batch -p1 < /tmp/localbeat-3218.patch
+          grep -q 'versionName = "3.21.8"' android/app/build.gradle.kts
+          grep -q 'versionCode = 2103255' android/app/build.gradle.kts
+          grep -q 'localbeat.playbackContextKind.v1' android/app/src/main/assets/app.js
+          grep -q 'lb3218ArtistModeBypassed' android/app/src/main/assets/app.js
+          grep -q 'app.js?v=3.21.8' android/app/src/main/assets/index.html
+          grep -q 'app.css?v=3.21.8' android/app/src/main/assets/index.html
+          node --check android/app/src/main/assets/app.js
+          test "$(sha256sum android/app/src/main/assets/app.js | cut -d' ' -f1)" = "5a4dd4f8407fe3ecc93ae553448546cdf64ee5ab7bbb6d5b233dec1232195a20"
+          test "$(sha256sum android/app/src/main/assets/app.css | cut -d' ' -f1)" = "c71104d00e4d7fb2c32e6a0b6c1ddd1d0ce8a82fe4d29d658aa58d0ffd53fd84"
+
+      - name: Apply LocalBeat 3.21.9 album shuffle, theme and Spotify fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          tr -d '\r\n' < localbeat-3219-build/localbeat-3219-ci.patch.gz.b64 | base64 --decode > /tmp/localbeat-3219.patch.gz
+          echo "9a3fe5e36dda2fcb58391b0efd89101a77375962716fce48433db94da0b1d216  /tmp/localbeat-3219.patch.gz" | sha256sum -c -
+          gzip -dc /tmp/localbeat-3219.patch.gz > /tmp/localbeat-3219.patch
+          echo "2ca06b03bddb6818b4b1c2fe2a792cba30a091ba3edd3be19847220628a5d67b  /tmp/localbeat-3219.patch" | sha256sum -c -
+          patch --batch -p1 < /tmp/localbeat-3219.patch
+          grep -q 'versionName = "3.21.9"' android/app/build.gradle.kts
+          grep -q 'versionCode = 2103256' android/app/build.gradle.kts
+          grep -q "lb3218ActivePlaybackContextKind==='album'" android/app/src/main/assets/app.js
+          grep -q "lb3218VisiblePlaybackContextKind='album'" android/app/src/main/assets/app.js
+          ! grep -q 'id="lbShuffleCoverReset"' android/app/src/main/assets/app.js
+          grep -q 'LB3219_TERMINAL_METADATA_ENTRY' overlay/localbeat_spotify.py
+          grep -q "'_type': 'video'" overlay/localbeat_spotify.py
+          grep -q 'app.js?v=3.21.9' android/app/src/main/assets/index.html
+          grep -q 'app.css?v=3.21.9' android/app/src/main/assets/index.html
+          grep -q -- '--lb-progress-pct' android/app/src/main/assets/app.css
+          grep -q 'color-mix(in srgb,var(--accent) 50%,white)' android/app/src/main/assets/app.css
+          node --check android/app/src/main/assets/app.js
+          python3 -m py_compile overlay/localbeat_spotify.py
+          test "$(sha256sum android/app/src/main/assets/app.js | cut -d' ' -f1)" = "f64530f9913813e37bed000f52ce79600b8c182b6baa20a15290a3fc6d434f92"
+          test "$(sha256sum android/app/src/main/assets/app.css | cut -d' ' -f1)" = "be3619ed4e7a5baeba787002fcf6c7c727d9e7422404b41cbbda16a4e82149ad"
+
+      - name: Apply LocalBeat 3.21.9 Spotify cover cycle guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          tr -d '\r\n' < localbeat-3219-build/localbeat-3219-cover-cycle-fix.patch.gz.b64 | base64 --decode > /tmp/localbeat-3219-cover-cycle-fix.patch.gz
+          echo "546a5f9cf5d526032510bd92fc19e9893fabf9d6c31f9713114681502ff029b3  /tmp/localbeat-3219-cover-cycle-fix.patch.gz" | sha256sum -c -
+          gzip -dc /tmp/localbeat-3219-cover-cycle-fix.patch.gz > /tmp/localbeat-3219-cover-cycle-fix.patch
+          echo "c475cc20c5e8e39d9c02cfb47b11cadee0fb0ae54be271e70ceeab606d709688  /tmp/localbeat-3219-cover-cycle-fix.patch" | sha256sum -c -
+          patch --batch -p1 < /tmp/localbeat-3219-cover-cycle-fix.patch
+          grep -q 'LB3219_COVER_CYCLE_GUARD' overlay/localbeat_spotify.py
+          python3 -m py_compile overlay/localbeat_spotify.py
+
+      - name: Apply LocalBeat 3.21.9 Spotify cover depth guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          tr -d '\r\n' < localbeat-3219-build/localbeat-3219-cover-depth-fix.patch.gz.b64 | base64 --decode > /tmp/localbeat-3219-cover-depth-fix.patch.gz
+          echo "a95085f09e7b64af11a4aad94648f46e9df8ec2f4328a7261f13343cc60fdbb3  /tmp/localbeat-3219-cover-depth-fix.patch.gz" | sha256sum -c -
+          gzip -dc /tmp/localbeat-3219-cover-depth-fix.patch.gz > /tmp/localbeat-3219-cover-depth-fix.patch
+          echo "8e0988911b554ff28cf0c4a3095960c2af1240027bab36764ab677f1010c623f  /tmp/localbeat-3219-cover-depth-fix.patch" | sha256sum -c -
+          patch --batch -p1 < /tmp/localbeat-3219-cover-depth-fix.patch
+          grep -q '_depth >= 4' overlay/localbeat_spotify.py
+          python3 -m py_compile overlay/localbeat_spotify.py
+
+      - name: Apply LocalBeat 3.21.10 artist context and shuffle zero fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          tr -d '\r\n' < localbeat-32110-build/localbeat-32110-ci.patch.gz.b64 | base64 --decode > /tmp/localbeat-32110.patch.gz
+          echo "35a4f3bed461f1ab5ac99741e2b19e7efac277237faf74186d23b5dbd2b7b541  /tmp/localbeat-32110.patch.gz" | sha256sum -c -
+          gzip -dc /tmp/localbeat-32110.patch.gz > /tmp/localbeat-32110.patch
+          echo "f14af36c8e1762a3a1c5305e080858c4e96e4455787cbc17cf84734c550fc4ec  /tmp/localbeat-32110.patch" | sha256sum -c -
+          patch --batch -p1 < /tmp/localbeat-32110.patch
+          grep -q 'versionName = "3.21.10"' android/app/build.gradle.kts
+          grep -q 'versionCode = 2103257' android/app/build.gradle.kts
+          grep -q "lb3218VisiblePlaybackContextKind='artist'" android/app/src/main/assets/app.js
+          grep -q 'lbShuffleArtistBlockSize()===0' android/app/src/main/assets/app.js
+          grep -q 'min="0" max="9999"' android/app/src/main/assets/app.js
+          grep -q 'Con 0 se usa el mismo aleatorio que en modo Normal' android/app/src/main/assets/app.js
+          grep -q '#lbShuffleArtistPanel\[hidden\]' android/app/src/main/assets/app.css
+          grep -q 'padding-bottom:13px' android/app/src/main/assets/app.css
+          grep -q 'app.js?v=3.21.10' android/app/src/main/assets/index.html
+          grep -q 'app.css?v=3.21.10' android/app/src/main/assets/index.html
+          grep -q "DB_VERSION=9" android/app/src/main/assets/app.js
+          grep -q "rideZenCompanionMode" android/app/src/main/assets/app.js
+          node --check android/app/src/main/assets/app.js
+          test "$(sha256sum android/app/src/main/assets/app.js | cut -d' ' -f1)" = "7a294e37478d7db52f8eeb0d2e60dbe4bcff0c1fdf1b28bdcd81f901042ee1f0"
+          test "$(sha256sum android/app/src/main/assets/app.css | cut -d' ' -f1)" = "1fdb8471052fbd23999d845f0e212676ea471d2d997029a269b8b1dc42df0285"
+          test "$(sha256sum android/app/src/main/assets/index.html | cut -d' ' -f1)" = "771ea7e96fca2f46b946c8314adc028133d7fdd25994a0048a72258a2b746ed2"
+
+      - name: Apply LocalBeat 3.21.11 UI and Home browser polish
+        shell: bash
+        run: |
+          set -euo pipefail
+          tr -d '\r\n' < localbeat-32111-build/localbeat-32111-ci.patch.gz.b64 | base64 --decode > /tmp/localbeat-32111.patch.gz
+          echo "059429339011cfcc1881b84441e6baaf494de8a47186677b0e232b071b532eaf  /tmp/localbeat-32111.patch.gz" | sha256sum -c -
+          gzip -dc /tmp/localbeat-32111.patch.gz > /tmp/localbeat-32111.patch
+          echo "d6e1c4744156cf7fb092c8fcba3c8f7d6f23e2263acdc6d366237996cee5a98d  /tmp/localbeat-32111.patch" | sha256sum -c -
+          patch --batch -p1 < /tmp/localbeat-32111.patch
+          grep -q 'versionName = "3.21.11"' android/app/build.gradle.kts
+          grep -q 'versionCode = 2103258' android/app/build.gradle.kts
+          grep -q 'function lb32111PlayerMenu' android/app/src/main/assets/app.js
+          grep -q 'data-lb32111-home-page' android/app/src/main/assets/app.js
+          grep -q 'lb32111ShuffleAnimateSection' android/app/src/main/assets/app.js
+          grep -q 'border-left:2px solid var(--accent)' android/app/src/main/assets/app.css
+          grep -q 'left:9px!important;right:9px!important;width:auto!important' android/app/src/main/assets/app.css
+          grep -q 'app.js?v=3.21.11' android/app/src/main/assets/index.html
+          grep -q 'app.css?v=3.21.11' android/app/src/main/assets/index.html
+          grep -q "DB_VERSION=9" android/app/src/main/assets/app.js
+          grep -q "rideZenCompanionMode" android/app/src/main/assets/app.js
+          node --check android/app/src/main/assets/app.js
+          test "$(sha256sum android/app/src/main/assets/app.js | cut -d' ' -f1)" = "b55b9d5acec351ce70d8520e4ae93bcdfcd242a6fa645935dd0c98621692d66d"
+          test "$(sha256sum android/app/src/main/assets/app.css | cut -d' ' -f1)" = "116f4f39e088aa768ddcd3d943c4671198472504c2e27195ed8faac794e0e25f"
+          test "$(sha256sum android/app/src/main/assets/index.html | cut -d' ' -f1)" = "6d293a7b8cdd193a3aa04a6c2c5036783778aaf9e2c7026e2b289c2c5d5ff6a7"
+
+      - name: Prepare yt-dlp and register LocalBeat Spotify extractor
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf android/ytdlp/src/main/vendor-python
+          mkdir -p android/ytdlp/src/main/vendor-python
+          python3 -m pip install --disable-pip-version-check --no-deps --target android/ytdlp/src/main/vendor-python "yt-dlp==2026.8.19" "certifi==2026.7.22"
+          cp overlay/localbeat_spotify.py android/ytdlp/src/main/vendor-python/yt_dlp/extractor/localbeat_spotify.py
+          INIT="android/ytdlp/src/main/vendor-python/yt_dlp/extractor/__init__.py"
+          printf '%s\n' \
+            '' \
+            '# LocalBeat 3.21.2 custom Spotify extractor.' \
+            '_localbeat_original_gen_extractor_classes = gen_extractor_classes' \
+            '' \
+            'def _localbeat_spotify_ie():' \
+            '    from .localbeat_spotify import SpotifyLocalBeatIE' \
+            '    return SpotifyLocalBeatIE' \
+            '' \
+            'def gen_extractor_classes():' \
+            '    classes = list(_localbeat_original_gen_extractor_classes())' \
+            '    spotify = _localbeat_spotify_ie()' \
+            '    try:' \
+            '        context = _extractors_context.value' \
+            "        context.setdefault('SpotifyLocalBeat', spotify)" \
+            "        context.setdefault('SpotifyLocalBeatIE', spotify)" \
+            '    except Exception:' \
+            '        pass' \
+            '    ordered = []' \
+            '    seen = set()' \
+            '    for klass in [spotify, *classes]:' \
+            '        if klass in seen:' \
+            '            continue' \
+            '        seen.add(klass)' \
+            '        ordered.append(klass)' \
+            '    return ordered' >> "$INIT"
+          PYTHONPATH="android/ytdlp/src/main/vendor-python" python3 -c "from yt_dlp.extractor import gen_extractor_classes,_extractors_context; from yt_dlp.extractor.localbeat_spotify import SpotifyLocalBeatIE; classes=gen_extractor_classes(); assert SpotifyLocalBeatIE in classes; assert _extractors_context.value.get('SpotifyLocalBeat') is SpotifyLocalBeatIE; assert _extractors_context.value.get('SpotifyLocalBeatIE') is SpotifyLocalBeatIE; print('SpotifyLocalBeatIE registry OK')"
+          python3 -m py_compile android/ytdlp/src/main/vendor-python/yt_dlp/extractor/localbeat_spotify.py
+          python3 -m py_compile "$INIT"
+          PYTHONPATH="android/ytdlp/src/main/vendor-python" python3 - <<'PY'
+          from yt_dlp import YoutubeDL
+          url = 'https://open.spotify.com/album/2K4PugGOkpi5qPrkuCauXV'
+          opts = {
+              'quiet': True,
+              'no_warnings': True,
+              'skip_download': True,
+              'socket_timeout': 30,
+              'retries': 3,
+              'extractor_retries': 3,
+              'extract_flat': 'in_playlist',
+          }
+          with YoutubeDL(opts) as ydl:
+              info = ydl.extract_info(url, download=False)
+          entries = [e for e in (info.get('entries') or []) if e]
+          assert entries, 'Spotify album returned no entries'
+          recursive = [(e.get('id'), e.get('_type'), e.get('url')) for e in entries if e.get('_type') == 'url']
+          assert not recursive, f'Recursive Spotify URL entries remain: {recursive[:3]}'
+          print('Spotify album regression OK:', info.get('title'), len(entries))
+          PY
+
+      - name: Set up Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+
+      - name: Build unsigned release APK
+        working-directory: android
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle --no-daemon --stacktrace -Dorg.gradle.jvmargs='-Xmx5g -XX:MaxMetaspaceSize=1g' :app:assembleRelease
+
+      - name: Verify and name unsigned APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          SRC="$(find android/app/build/outputs/apk/release -maxdepth 1 -type f -name '*.apk' | head -n 1)"
+          test -n "$SRC"
+          OUT="LocalBeat-3.21.11-UNSIGNED.apk"
+          cp "$SRC" "$OUT"
+          unzip -t "$OUT" >/dev/null
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$OUT" | head -n 5
+          sha256sum "$OUT" | tee LocalBeat-3.21.11-UNSIGNED.apk.sha256
+          ls -lh "$OUT"
+          cp "$ANDROID_HOME/build-tools/35.0.0/lib/apksigner.jar" apksigner.jar
+          sha256sum apksigner.jar | tee apksigner.jar.sha256
+
+      - name: Upload unsigned LocalBeat APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: LocalBeat-3.21.11-UNSIGNED
+          path: |
+            LocalBeat-3.21.11-UNSIGNED.apk
+            LocalBeat-3.21.11-UNSIGNED.apk.sha256
+            apksigner.jar
+            apksigner.jar.sha256
+          if-no-files-found: error
+          retention-days: 2
