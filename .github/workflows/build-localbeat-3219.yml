@@ -223,6 +223,18 @@ jobs:
           test "$(sha256sum android/app/src/main/assets/app.js | cut -d' ' -f1)" = "f64530f9913813e37bed000f52ce79600b8c182b6baa20a15290a3fc6d434f92"
           test "$(sha256sum android/app/src/main/assets/app.css | cut -d' ' -f1)" = "be3619ed4e7a5baeba787002fcf6c7c727d9e7422404b41cbbda16a4e82149ad"
 
+      - name: Apply LocalBeat 3.21.9 Spotify cover cycle guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          tr -d '\r\n' < localbeat-3219-build/localbeat-3219-cover-cycle-fix.patch.gz.b64 | base64 --decode > /tmp/localbeat-3219-cover-cycle-fix.patch.gz
+          echo "546a5f9cf5d526032510bd92fc19e9893fabf9d6c31f9713114681502ff029b3  /tmp/localbeat-3219-cover-cycle-fix.patch.gz" | sha256sum -c -
+          gzip -dc /tmp/localbeat-3219-cover-cycle-fix.patch.gz > /tmp/localbeat-3219-cover-cycle-fix.patch
+          echo "c475cc20c5e8e39d9c02cfb47b11cadee0fb0ae54be271e70ceeab606d709688  /tmp/localbeat-3219-cover-cycle-fix.patch" | sha256sum -c -
+          patch --batch -p1 < /tmp/localbeat-3219-cover-cycle-fix.patch
+          grep -q 'LB3219_COVER_CYCLE_GUARD' overlay/localbeat_spotify.py
+          python3 -m py_compile overlay/localbeat_spotify.py
+
       - name: Prepare yt-dlp and register LocalBeat Spotify extractor
         shell: bash
         run: |
