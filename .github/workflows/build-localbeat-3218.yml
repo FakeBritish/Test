@@ -184,9 +184,9 @@ jobs:
         run: |
           set -euo pipefail
           tr -d '\r\n' < localbeat-3218-build/localbeat-3218-ci.patch.gz.b64 | base64 --decode > /tmp/localbeat-3218.patch.gz
-          echo "c6bf8a96343de986ec27c2976f5604421b7ef8c5230ffe0ce56ce21ca314e66c  /tmp/localbeat-3218.patch.gz" | sha256sum -c -
+          echo "1e0906f32698229b63a9adc6434958a2a902058be8552a0201d843981818b68a  /tmp/localbeat-3218.patch.gz" | sha256sum -c -
           gzip -dc /tmp/localbeat-3218.patch.gz > /tmp/localbeat-3218.patch
-          echo "412dfb41d02e84e1b4f05bb7c0fc99934b96986169a82bef331c2848770bf45e  /tmp/localbeat-3218.patch" | sha256sum -c -
+          echo "0960d54e0f5032f87d68122f4980b08ba3da8625a2486548071eec07c3bb61b9  /tmp/localbeat-3218.patch" | sha256sum -c -
           patch --batch -p1 < /tmp/localbeat-3218.patch
           grep -q 'versionName = "3.21.8"' android/app/build.gradle.kts
           grep -q 'versionCode = 2103255' android/app/build.gradle.kts
