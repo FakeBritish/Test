@@ -235,6 +235,18 @@ jobs:
           grep -q 'LB3219_COVER_CYCLE_GUARD' overlay/localbeat_spotify.py
           python3 -m py_compile overlay/localbeat_spotify.py
 
+      - name: Apply LocalBeat 3.21.9 Spotify cover depth guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          tr -d '\r\n' < localbeat-3219-build/localbeat-3219-cover-depth-fix.patch.gz.b64 | base64 --decode > /tmp/localbeat-3219-cover-depth-fix.patch.gz
+          echo "a95085f09e7b64af11a4aad94648f46e9df8ec2f4328a7261f13343cc60fdbb3  /tmp/localbeat-3219-cover-depth-fix.patch.gz" | sha256sum -c -
+          gzip -dc /tmp/localbeat-3219-cover-depth-fix.patch.gz > /tmp/localbeat-3219-cover-depth-fix.patch
+          echo "8e0988911b554ff28cf0c4a3095960c2af1240027bab36764ab677f1010c623f  /tmp/localbeat-3219-cover-depth-fix.patch" | sha256sum -c -
+          patch --batch -p1 < /tmp/localbeat-3219-cover-depth-fix.patch
+          grep -q '_depth >= 4' overlay/localbeat_spotify.py
+          python3 -m py_compile overlay/localbeat_spotify.py
+
       - name: Prepare yt-dlp and register LocalBeat Spotify extractor
         shell: bash
         run: |
