@@ -375,6 +375,19 @@ jobs:
           test "$(sha256sum android/app/src/main/assets/app.css | cut -d' ' -f1)" = "f809ae384e673779bcddddf3b2b9d46669d5ce637054d5e8f48ea64177c08ceb"
           test "$(sha256sum android/app/src/main/assets/index.html | cut -d' ' -f1)" = "162be3307e2b4b58fc89fc6ee1443a3acb66d0164f7fd77998d09517163e0a46"
 
+      - name: Finalize LocalBeat 3.21.14 displayed version
+        shell: bash
+        run: |
+          set -euo pipefail
+          tr -d '\r\n' < localbeat-32114-build/localbeat-32114-version.patch.gz.b64 | base64 --decode > /tmp/localbeat-32114-version.patch.gz
+          echo "77465437265d2c19110cf5636caf327cb178690cf3755cf54ce20f4fb8b27b06  /tmp/localbeat-32114-version.patch.gz" | sha256sum -c -
+          gzip -dc /tmp/localbeat-32114-version.patch.gz > /tmp/localbeat-32114-version.patch
+          echo "7e38203a594c7711930d2bee90bf80cbbe126aa1b9e1b1492af771062085ed00  /tmp/localbeat-32114-version.patch" | sha256sum -c -
+          patch --batch -p1 < /tmp/localbeat-32114-version.patch
+          grep -q "LB_PUBLIC_VERSION='LocalBeat 3.21.14'" android/app/src/main/assets/app.js
+          node --check android/app/src/main/assets/app.js
+          test "$(sha256sum android/app/src/main/assets/app.js | cut -d' ' -f1)" = "515293908e9eb7a2976191a240d0ba8dd689975391706e4aaffa2ca9660f2af3"
+
       - name: Prepare yt-dlp and register LocalBeat Spotify extractor
         shell: bash
         run: |
