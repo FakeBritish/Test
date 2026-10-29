@@ -1,0 +1,54 @@
+name: VoltZen - Compilar APK
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - voltzen-apk-build
+    paths:
+      - voltzen/source.tar.gz
+      - .github/workflows/build-voltzen.yml
+permissions:
+  contents: write
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Android SDK
+        uses: android-actions/setup-android@v3
+      - name: Android API 35
+        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+      - name: Gradle 8.11.1
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+      - name: Extraer exactamente el proyecto VoltZen
+        run: |
+          mkdir -p generated
+          tar -xzf voltzen/source.tar.gz -C generated
+          test -f generated/app/src/main/java/com/glc/voltzen/MainActivity.java
+      - name: Compilar APK Android
+        run: gradle --no-daemon --stacktrace -p generated :app:assembleDebug
+      - name: Guardar APK
+        run: |
+          mkdir -p voltzen/APK
+          cp generated/app/build/outputs/apk/debug/app-debug.apk voltzen/APK/VoltZen-v1.0.0-debug.apk
+      - name: Artefacto APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: VoltZen-v1.0.0-APK
+          path: voltzen/APK/VoltZen-v1.0.0-debug.apk
+          if-no-files-found: error
+      - name: Publicar APK en esta rama
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add voltzen/APK/VoltZen-v1.0.0-debug.apk
+          git commit -m "Add compiled VoltZen APK [skip ci]"
+          git push origin HEAD:voltzen-apk-build
